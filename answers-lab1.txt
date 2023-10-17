@@ -1,0 +1,94 @@
+Part 1: PC Bootstrap
+Nothing to put on the Writeup here
+
+Part 2: The Boot Loader
+1. At what point does the processor start executing 32-bit code? What exactly causes the switch from 16- to 32-bit mode?
+The processor starts executing 32-bit code after we execute the code at 0x7c2d. There are a couple hints for why, the first being gdb telling us the target architecture assumption has changed to i386, and the second being the following commands have changed from using the 16 bit ax register to the 32 bit eax register. The thing that causes the switch is the ljmp $pot_MODE_CSEG, $protcseg command, but specifically on gdb it showed as ljmp 0x8, 0x7c32
+
+2. What is the last instruction of the boot loader executed, and what is the first instruction of the kernel it just loaded?
+Last instruction of boot loader: 	7d61: 	call   *0x10018
+First instruction of kernel: 	0x0010000c:	movw   $0x1234,0x472
+
+3. Where is the first instruction of the kernel? 
+It is at 0x0010000c according to gdb, but at 0xf010000c according to kernel.asm
+
+4. How does the boot loader decide how many sectors it must read in order to fetch the entire kernel from disk? Where does it find this information? 
+It gets this information (at its root) from the ELF struct. Then it is loaded to the ph var, allong with it’s offset. Then it loops through a number of times equal to the number of segments from the header table. In the ELFHDR + the original one, reading each segment.
+
+5. Where do the pointer addresses in lines 1 and 6 come from? 
+The line 1 is just using the pointer print on these variables we created, but by line 6 we can see that we have set b and c to be pointing towards a. A does not change, c is 1 byte away from a because its been incremented as a character which is 1 byte large, and b is 4 bytes away because it was incremented as an integer.
+
+6. How do we get all the values in lines 2 through 4?
+A[0] becomes 200 when we point c at a and set c[0] to  200. Similarly a[1] becomes 300 that way. *(c+2) is pointer math that sets a[2] to be 301, and 3[c] sets a[3] to be 302 by editing the 3rd index. A[1] becomes 400 when we offset the pointer of c by 1, or 4 bytes (its an int pointer). Question 7 explains the distorted a[0] and a[1] values.
+
+7. Why are the values printed in line 5 seemingly corrupted?
+Because when we run the line c = (int*)((char*)a + 1), this sets c to be 1 byte offset from a, so when we set c to be 500, we are editing part of index 0 and part of index 1, not 1 index.
+
+8. Why are they different?
+They are different because by the time we get to the kernel, the boot loader has filled out that section of memory
+
+9. What is there at the second breakpoint? 
+At the second breakpoint is the 1badb002, which includes our magic number from the elf heade
+
+Part 3: The Kernel
+10. What is the first instruction after the new mapping is established that would fail to work properly if the mapping weren’t in place? Comment out the movl %eax, %cr0 in kern/entry.S, trace into it, and see if you were right.
+ The line that fails is the jmp *%eax, because without that line we don’t store the “or’d” value into cr0 to set up paging.
+
+11. Explain the interface between kern/printf.c and kern/console.c. Specifically, what function does kern/console.c export? How is this function used by kern/printf.c?
+Printf.c uses the cputchar() function from console.c, inside of its own putch() function. Printf.c calls the vcprintfmt() function, which uses the pitch() function to call to console.c. I believe this likely leads to printing each character to the console.
+
+12. Explain the following from kern/console.c: 
+I will say that the thing it asks to explain is not in the code, console.c uses memove not memcpy, but essentially, if the current position is greater than the size, it moves back the buffer, then clears each index with a space.
+
+13. In the call to cprintf(), to what does fmt point? To what does ap point?
+Fmt points to the string. Ap is a variable list that points to a list of x, y, and z.
+
+14. List (in order of execution) each call to cons_putc, va_arg, and vcprintf. For cons_putc, list its argument as well. For va_arg, list what ap points to before and after the call. For vcprintf list the values of its two arguments. 
+vcprintf("x %d, y %x, z %d\n", ap -> x)
+cons_putc(‘x’)
+cons_putc(‘ ‘)
+ap -> x, va_arg(), ap -> y
+cons_putc(1)
+cons_putc(‘,’)
+cons_putc(‘ ‘)
+cons_putc(‘y’)
+cons_putc(‘ ‘)
+ap -> y, va_arg(), ap -> z
+cons_putc(3)
+cons_putc(‘,’)
+cons_putc(‘ ‘)
+cons_putc(‘z’)
+cons_putc(‘ ‘)
+Ap -> z, va_arg(), ap ->null?
+cons_putc(‘4’)
+
+15. What is the output? Explain how this output is arrived at in the step-by-step manner of the previous exercise. Here’s an ASCII table (or type man ascii) that maps bytes to characters.
+The output is He110 World
+vcprintf("H%x Wo%s”, ap -> 57616)
+cons_putc(‘H’)
+ap -> 57616, va_arg(), ap -> &i
+57616(dec) = E110(hex)
+cons_putc(e)
+cons_putc(‘1)
+cons_putc(1)
+cons_putc(0)
+cons_putc(‘ ‘)
+cons_putc(‘W’)
+cons_putc(‘o‘)
+ap -> &i, va_arg(), ap -> null?
+0x72 = r, 6c = l, 64 = d, 00 = ‘\0’
+cons_putc(‘r’)
+cons_putc(‘l’)
+cons_putc(‘d‘)
+
+16. The output depends on the fact that the x86 is little-endian. If the x86 were instead big-endian what would you set i to in order to yield the same output? Would you need to change 57616 to a different value? 
+If it was big endian we would reverse it to 0x726c640000, and since 57616 is converted to hex and the hex is printed we would not care.
+
+17. In the following code, what is going to be printed after 'y='? (note: the answer is not a specific value.) Why does this happen? 
+For my computer it prints y=1600. It is undefined behavior because we only give one argument to ap, and it is trying to read two.
+
+18. How would you have to change cprintf or its interface so that it would still be possible to pass it a variable number of arguments?
+Perhaps we would need to have an argument much like int main does, which keeps track of how many arguments were passed to the function.
+
+19. How many 32-bit words does each recursive nesting level of test_backtrace push on the stack, and what are those words?
+It pushes 2, which are ebx and ebp, which are the previous functions value of the argument x and stack pointer base respectively.
