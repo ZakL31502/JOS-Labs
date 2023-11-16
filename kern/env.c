@@ -116,6 +116,19 @@ env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
+	
+	//Handle first environment
+	env_free_list = &envs[0];
+	envs[0].env_id = 0;
+
+	//Handle rest of environments in loop
+	for(int i = 1; i < NENV; i++){	//Keep in mind NENV = # environments
+		envs[i-1].env_link = &envs[i];		//Keep envs links in same order as array
+		envs[i].env_id = 0;		//Set env_id to 0 (special)
+	}
+
+	//Handle last environment
+	envs[NENV - 1].env_link = NULL; 	//Keep the list to have a Null ending
 
 	// Per-CPU part of the initialization
 	env_init_percpu();
@@ -179,6 +192,15 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+
+	//This ones simple, set up pgdir, use provided code to fill it out, inc pp_ref
+	//I think we use page2kva here because we want the VA space of the environments? 
+	e->env_pgdir = page2kva(p);
+	for(int i = PDX(UTOP); i < NPDENTRIES; i++){
+		e->env_pgdir[i] = kern_pgdir[i];
+	}
+	p->pp_ref++;
+
 
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
@@ -267,6 +289,20 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+	
+	//Corner case, length = 0? I don't quite know what other cases it can be, testing required
+	if (len == 0)
+		return;
+
+	uintptr_t va_round = ROUNDDOWN((uintptr_t)va, PGSIZE);		//Round our variables for the given hint
+	uintptr_t valen_round = ROUNDUP((uintptr_t)va+len, PGSIZE);
+	
+	int n = (valen_round - va_round) / PGSIZE;		//Need number of pages in this region since values not page aligned at first
+	for(int i = 0; i < n; i++){
+		//Insert a page into the pgdirectory of the environment
+		//Use page_alloc(0) to just grab the next one
+		page_insert(e->env_pgdir, page_alloc(0), va_round + (i * PGSIZE), PTE_W | PTE_U);
+	}
 }
 
 //
@@ -323,6 +359,8 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  What?  (See env_run() and env_pop_tf() below.)
 
 	// LAB 3: Your code here.
+	struct Elf* elf = (struct Elf*) binary;
+	 
 
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
