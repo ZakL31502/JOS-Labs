@@ -138,7 +138,7 @@ mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
-	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
+	kern_pgdir = (pde_t*) boot_alloc(PGSIZE);
 	memset(kern_pgdir, 0, PGSIZE);
 
 	//////////////////////////////////////////////////////////////////////
@@ -212,7 +212,7 @@ mem_init(void)
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
 	//Mapping from KSTACKTOP-KSTKSIZE to KSTACKTOP as the rest isn't backed by physical memory
-	boot_map_region(kern_pgdir, KSTACKTOP - KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_P | PTE_W);
+	boot_map_region(kern_pgdir, (KSTACKTOP - KSTKSIZE), KSTKSIZE, PADDR(bootstack), PTE_P | PTE_W);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -223,7 +223,7 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 	//2^32 = 0x100000000
-	boot_map_region(kern_pgdir, KERNBASE, 0x100000000 - KERNBASE, 0, PTE_P | PTE_W);
+	boot_map_region(kern_pgdir, KERNBASE, (0x100000000 - KERNBASE), 0, PTE_P | PTE_W);
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -580,6 +580,20 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	//address isn't page aligned, need to set down to a PGSIZE rounding
+	uintptr_t* virt_addr = (uintptr_t*)va;
+
+	//Implemented Roundown into for loop because error messages would not be correct if first address didn't work
+	for(uintptr_t* i = virt_addr; i < (virt_addr +  len); i = ROUNDDOWN(i + PGSIZE, PGSIZE)){
+		pte_t* pte = NULL;
+		//Use page_lookup to see if we can access this page
+		struct PageInfo* pp = page_lookup(env->env_pgdir, (void*)i, &pte);
+		//If Not Accessable (lookup returned NULL, permissions aren't correct, or address >= ULIM)
+		if(!pp || !(*pte & perm) || (uintptr_t)i >= ULIM){
+			user_mem_check_addr = (uintptr_t)i;
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }

@@ -1,0 +1,34 @@
+Zakarie Leskowsky
+CS444 Lab 3 Answers
+
+PART A: USER ENVIRONMENTS AND EXCEPTION HANDLING
+
+1. What is the purpose of having an individual handler function for each exception/interrupt?
+(i.e., if all exceptions/interrupts were delivered to the same handler, what feature that exists
+in the current implementation could not be provided?)
+    -If we had a single handler, we wouldn't be able to push the error codes onto the stack.
+
+2. Did you have to do anything to make the user/softint program behave correctly? The grade
+script expects it to produce a general protection fault (trap 13), but softint’s code
+says int $14. Why should this produce interrupt vector 13? What happens if the kernel
+actually allows softint’s int $14 instruction to invoke the kernel’s page fault handler (which
+is interrupt vector 14)?
+    -It will produce a General Protection because the privilege level of pgflt is set to 0 which is the kernel level privilege,
+     meaning only the kernel can call the page fault interrupt, not our user level code. When I modify it to set the privilege 
+     to 3 (user level), it does indeed trigger a page fault. If the user level privilege could call a page fault, as the lab doc states,
+     it is possible to go to an area with more permissions than the user level, where the kernel can read or write but the user cannot.
+     This is obviously a dangerous thing, and so we implement several things to prevent this including memory assertion.
+
+PART B: PAGE FAULTS, BREAKPOINTS EXCEPTIONS, AND SYSTEM CALLS
+3. The break point test case will either generate a break point exception or a general
+protection fault depending on how you initialized the break point entry in the IDT (i.e., your
+call to SETGATE from trap_init). Why? How do you need to set it up in order to get the
+breakpoint exception to work as specified above and what incorrect setup would cause it to
+trigger a general protection fault?
+    -It depends on the privilege level. When it is set to privilege level 3 (user) it triggers a Breakpoint, but When
+     it is set to privilege level 0(kernel), it triggers a General Protection. 
+
+4. What do you think is the point of these mechanisms, particularly in light of what
+the user/softint test program does?
+    -It protects the kernel level from the user level code. We need to be careful what kind of exceptions and interrupts
+     the user can call.
