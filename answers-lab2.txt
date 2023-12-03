@@ -1,0 +1,54 @@
+Zakarie Leskowsky
+CS444 Lab 2 Answers
+
+PART 1. PHYSICAL PAGE MANAGEMENT
+N/A
+
+PART 2. VIRTUAL MEMORY
+1. Assuming that the following JOS kernel code is correct, what type should variable x have, uintptr_t or physaddr_t, and why?
+mystery_t x;
+char* value = return_a_pointer();
+*value = 10;
+x = (mystery_t) value;
+    -the type of x should be uintptr_t as it needs to be cast from a pointer
+
+PART 3. KERNEL ADDRESS SPACE
+2. What entries (rows) in the page directory have been filled in at this point? What addresses do they map and where do they point? 
+In other words, fill out this table as much as possible:
+
+important to remember: 4MB = 0x400000, most of this taken from memlayout/pmap.c
++----------------------------------------------------------------------+
+| Entry | Base Virtual Address | Points to (logically)                 |
++----------------------------------------------------------------------+
+| 1023  | 0xffc00000           | Page table for top 4MB of phys memory |
+| 1022  | 0xff800000           | Some Page holding RAM                 |
+| .     | ?                    | Some Page holding RAM                 |
+| 960   | 0xf0000000           | Kernel Physical Memory                |
+| 959   | 0xefc00000           | Memory-mapped I/O                     |
+| 958   | 0xef800000           | Empty Memory                          |
+| 957   | 0xef400000           | Empty Memory                          |
+| 956   | 0xef000000           | Our Pages table                       |
+| 955   | 0xeec00000           | Empty Memory                          |
+| .     | ?                    | Empty Memory                          |
+| 2     | 0x00800000           | Empty Memory (UTEXT)                  |
+| 1     | 0x00400000           | Empty Memory (UTEMP)                  |
+| 0     | 0x00000000           | Empty Memory                          |
++----------------------------------------------------------------------+
+
+3. We have placed the kernel and user environment in the same address space. Why will user programs not be able to read or write the kernel’s memory? 
+What specific mechanisms protect the kernel memory?
+    - That would be the User permission flag. If it is set to off, then the user can't access it.
+
+4. What is the maximum amount of physical memory that this operating system can support? Why?
+    - as our last bootmap call, we allocate up to 2^32 - KERNBASE (0xf0000000) physical memory, even if we don't have 
+    that much space. So we have half of 2^32 which becomes about 268MB as our maximum
+
+5. How much space overhead is there for managing memory, if we actually had the maximum amount of physical memory? How is this overhead broken down?
+    - assuming we have 268MB, divided by 4096 bytes per page gives us 65,429 pages
+    if we have an 8 byte structure (pointer and int), that is 523432 bytes for pages.
+
+6. Revisit the page table setup in kern/entry.S and kern/entrypgdir.c. Immediately after we turnon paging, EIP is still a low number (a little over 1MB). 
+At what point do we transition to running at an EIP above KERNBASE? What makes it possible for us to continue executing at a low EIP between when we 
+enable paging and when we begin running at an EIP above KERNBASE? Why is this transition necessary?
+    - entry.S states that we transition to an EIP above KERNBASE right before entering the c code. The transition is necessary for transparency, efficiency, and protection. ]
+    The thing that enables this is the mapping between physical and virtual memory.
