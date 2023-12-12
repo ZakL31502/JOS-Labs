@@ -65,18 +65,48 @@ _pgfault_upcall:
 	// ways as registers become unavailable as scratch space.
 	//
 	// LAB 4: Your code here.
+	
+	//I don't normally keep my psuedocode/thought process in the code, but this one was confusing
+	//so we are leaving it for future Zak
+	//Psuedocode from discord understanding: Come back to later when not tired!
+	//We need to do eip last, which is obvious as it says what to do next. We
+	//can do this by putting eip at esp-4. So that way when we are all done we do
+	//ret which will pop the eip into place. We want to do that here as after we restore
+	//registers we can't use our registers anymore. The ta hinted we can get around our
+	//inability to use push with some clever movl instructions. Another issue is manuevering
+	//around our two stacks. IMPORTANT. We are on the exception stack currently, and want to retrieve
+	//values from the trap-time stack so once we leave the exception stack we go where we want to go
+
+
+	//Analyzing the utf struct tells us tf_eip is 40 away from esp at this point, and tf_esp is 48
+	movl 40(%esp), %eax	//Store tf_eip into eax 
+	movl 48(%esp), %ebx	//Grab tf_esp, put it into ebx
+
+	//Make space for eip (recursive case?), put esp back into the stack, store tf_eip into tf_esp-4
+	subl $4, %ebx
+	movl %ebx, 48(%esp)
+	movl %eax, (%ebx)
 
 	// Restore the trap-time registers.  After you do this, you
 	// can no longer modify any general-purpose registers.
 	// LAB 4: Your code here.
+	addl $8, %esp	//move to Registers	
+	popa			//pop all registers
 
 	// Restore eflags from the stack.  After you do this, you can
 	// no longer use arithmetic operations or anything else that
 	// modifies eflags.
 	// LAB 4: Your code here.
+	addl $4, %esp	//skip past eip to do last
+	popf			//Pop flags
 
 	// Switch back to the adjusted trap-time stack.
 	// LAB 4: Your code here.
+	pop %esp
+	
+	//lea -4(%esp), %esp //I don't quite understand why adding this line breaks everything, further research required
+	//I think it's just because my movl calls above situated things correctly that lea was unneeded?
 
 	// Return to re-execute the instruction that faulted.
 	// LAB 4: Your code here.
+	ret

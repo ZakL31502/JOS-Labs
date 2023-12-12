@@ -1,0 +1,46 @@
+Zakarie Leskowsky
+CS444 Lab 4 Answers
+
+PART A: Multiprocessor Support and Cooperative Multitasking
+1. Compare kern/mpentry.S side by side with boot/boot.S. Bearing in mind
+that kern/mpentry.S is compiled and linked to run above KERNBASE just like everything else
+in the kernel, what is the purpose of macro MPBOOTPHYS? Why is it necessary
+in kern/mpentry.S but not in boot/boot.S? In other words, what could go wrong if it were
+omitted in kern/mpentry.S? Hint: recall the differences between the link address and the
+load address that we have discussed in Lab 1.
+    - MPBOOTPHYS will translate the virtual address above KERNBASE to it's corresponding
+      physical address. This is unneeded in boot.S because as stated in Lab 1, the bootloader's
+      link and load address are the same, while the kernel has different values. If it was omitted,
+      we would not have the correct load address and would load code incorrectly, causing failure.
+
+2. It seems that using the big kernel lock guarantees that only one CPU can run the
+kernel code at a time. Why do we still need separate kernel stacks for each CPU?
+Describe a scenario in which using a shared kernel stack will go wrong, even with the
+protection of the big kernel lock.
+    - We need seperate kernel stacks because if we used a shared one, there is a scenario
+      where two cpu's will push their trap frame onto the kernel stack, and when the first one
+      attempts to return to user mode, it will pop the second cpu's trapframe off the stack.
+
+3. In your implementation of env_run() you should have called lcr3(). Before and after
+the call to lcr3(), your code makes references (at least it should) to the variable e, the
+argument to env_run. Upon loading the %cr3 register, the addressing context used by the
+MMU is instantly changed. But a virtual address (namely e) has meaning relative to a
+given address context–the address context specifies the physical address to which the
+virtual address maps. Why can the pointer e be dereferenced both before and after the
+addressing switch?
+    - Because the virtual addresses above UTOP are mapped the same for all environments.
+
+4. Whenever the kernel switches from one environment to another, it must ensure the
+old environment’s registers are saved so they can be restored properly later. Why?
+Where does this happen?
+    - It needs to do this so that way when (or if) it returns to that environment,
+      it can continue from where it left off. It happens when we save to env_tf and 
+      then use env_pop_tf when we return.
+
+
+PART B: Copy-on-Write Fork
+N/A
+
+
+PART C: Preemptive Multitasking and Inter-Process Communication (IPC)
+N/A

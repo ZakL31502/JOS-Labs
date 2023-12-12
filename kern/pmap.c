@@ -277,7 +277,10 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	for (int i = 0; i < NCPU; i++) {
+		uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+		boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W | PTE_P);
+	}
 }
 
 // --------------------------------------------------------------
@@ -298,6 +301,9 @@ page_init(void)
 	// LAB 4:
 	// Change your code to mark the physical page at MPENTRY_PADDR
 	// as in use
+	struct PageInfo* mpentry_page = pa2page(MPENTRY_PADDR);
+	mpentry_page->pp_ref = 1;	//in_use
+	mpentry_page->pp_link = NULL;
 
 	// The example code here marks all physical pages as free.
 	// However this is not truly the case.  What memory is free?
@@ -308,7 +314,10 @@ page_init(void)
 	pages[0].pp_link = NULL;
 	//  2) The rest of base memory, [PGSIZE, npages_basemem * PGSIZE)
 	//     is free.
-	for(size_t i = 1; i < npages_basemem; i++){
+	for(size_t i = 0; i < npages_basemem; i++){
+		if(pages[i].pp_ref == 1){
+			continue;
+		}
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
@@ -622,7 +631,28 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+
+	//Roundup size to be size of page, check if we will overflow
+	size = ROUNDUP(size, PGSIZE);
+	if(base + size > MMIOLIM){
+		panic("mmio_map_region: Overflowing MMIOLIM");
+	}
+
+	//Get start and end of section, and offset.
+	uintptr_t pa_start = ROUNDDOWN(pa, PGSIZE);
+	uintptr_t pa_end = ROUNDUP(pa + size, PGSIZE);
+	uintptr_t pa_off = pa & 0xfff;
+	
+	//Map [pa_start, pa_end) to new_base
+	boot_map_region(kern_pgdir, base, size, pa_start, PTE_PCD | PTE_PWT | PTE_W);
+
+	//pa may not be page aligned
+	void *ret = (void*)(base + pa_off);
+
+	//Increment Base
+	uintptr_t new_base = base + pa_end - pa_start;
+	base = new_base;
+	return ret;
 }
 
 static uintptr_t user_mem_check_addr;
@@ -864,9 +894,11 @@ check_kern_pgdir(void)
 	// (updated in lab 4 to check per-CPU kernel stacks)
 	for (n = 0; n < NCPU; n++) {
 		uint32_t base = KSTACKTOP - (KSTKSIZE + KSTKGAP) * (n + 1);
-		for (i = 0; i < KSTKSIZE; i += PGSIZE)
+
+		for (i = 0; i < KSTKSIZE; i += PGSIZE){
 			assert(check_va2pa(pgdir, base + KSTKGAP + i)
 				== PADDR(percpu_kstacks[n]) + i);
+		}
 		for (i = 0; i < KSTKGAP; i += PGSIZE)
 			assert(check_va2pa(pgdir, base + i) == ~0);
 	}
@@ -1067,6 +1099,7 @@ check_page(void)
 	// test mmio_map_region
 	mm1 = (uintptr_t) mmio_map_region(0, 4097);
 	mm2 = (uintptr_t) mmio_map_region(0, 4096);
+
 	// check that they're in the right region
 	assert(mm1 >= MMIOBASE && mm1 + 8192 < MMIOLIM);
 	assert(mm2 >= MMIOBASE && mm2 + 8192 < MMIOLIM);
